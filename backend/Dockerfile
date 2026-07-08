@@ -1,0 +1,37 @@
+# ---- Build Stage ----
+FROM node:22-alpine AS builder
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci --only=production && npm cache clean --force
+RUN npm ci --only=development
+
+COPY tsconfig.json nest-cli.json ./
+COPY src/ src/
+COPY prisma/ prisma/
+
+RUN npx prisma generate
+RUN npm run build
+
+# ---- Production Stage ----
+FROM node:22-alpine AS runner
+WORKDIR /app
+
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 --ingroup nodejs healthapp
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/prisma ./prisma
+COPY package.json ./
+
+ENV NODE_ENV=production
+ENV PORT=3333
+
+USER healthapp
+EXPOSE 3333
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3333/api/health || exit 1
+
+CMD ["node", "dist/main"]
