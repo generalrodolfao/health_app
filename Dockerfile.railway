@@ -61,8 +61,8 @@ ENV PGDATABASE=healthapp
 # App connects to localhost postgres (same container)
 ENV DATABASE_URL=postgresql://healthapp@localhost:5432/healthapp?schema=public
 
-# Volume for postgres data persistence
-VOLUME ["/var/lib/postgresql/data"]
+# NOTE: Railway volumes are configured in the dashboard (or CLI), NOT in
+# Dockerfile. Mount path: /var/lib/postgresql/data
 
 EXPOSE 3333
 
