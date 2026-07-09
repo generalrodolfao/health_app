@@ -1,9 +1,5 @@
-# ── Self-contained: PostgreSQL + Node in one container ──
-# Lightest possible: ~180MB total (node:22-alpine 150MB + postgresql 30MB)
-# No Railway PostgreSQL plugin needed. Persists data via Railway volume.
-#
-# Build:  docker build -f Dockerfile.railway -t healthapp .
-# Run:    docker run -p 3333:3333 -v healthapp-pgdata:/var/lib/postgresql/data healthapp
+# ── Minimal test deploy: SQLite (file on disk) + single Node app ──
+# No PostgreSQL, no Volume, no JWT. Just boot for testing.
 
 # ---- Build Stage ----
 FROM node:22-alpine AS builder
@@ -22,53 +18,22 @@ RUN npx prisma generate
 RUN npm run build
 RUN npm prune --production
 
-# ---- Runtime Stage: Node + PostgreSQL ----
+# ---- Runner ----
 FROM node:22-alpine AS runner
+WORKDIR /app
 
-# Install PostgreSQL (alpine package ~30MB) — fallback across alpine versions
-RUN (apk add --no-cache postgresql16 postgresql16-contrib 2>/dev/null || \
-     apk add --no-cache postgresql17 postgresql17-contrib 2>/dev/null || \
-     apk add --no-cache postgresql postgresql-contrib) \
-    && apk add --no-cache openssl wget \
-    && mkdir -p /var/run/postgresql /var/lib/postgresql/data \
-    && chown -R postgres:postgres /var/run/postgresql /var/lib/postgresql/data \
-    && chmod 700 /var/lib/postgresql/data
+RUN apk add --no-cache openssl wget
 
-# Create non-root app user
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 --ingroup nodejs healthapp
-
-# Copy built app from builder
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY backend/package.json ./
 
-# Copy startup script
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
-
-# ── Environment ──
 ENV NODE_ENV=production
 ENV PORT=3333
+ENV DATABASE_URL="file:/app/data.db"
 
-# PostgreSQL config (internal, not exposed)
-ENV PGDATA=/var/lib/postgresql/data
-ENV PGPORT=5432
-ENV PGUSER=healthapp
-ENV PGDATABASE=healthapp
-
-# App connects to localhost postgres (same container)
-ENV DATABASE_URL=postgresql://healthapp@localhost:5432/healthapp?schema=public
-
-# NOTE: Railway volumes are configured in the dashboard (or CLI), NOT in
-# Dockerfile. Mount path: /var/lib/postgresql/data
-
-EXPOSE 3333
-
-# Healthcheck: app responds even if DB is initializing
-HEALTHCHECK --interval=10s --timeout=5s --start-period=40s --retries=5 \
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=5 \
   CMD wget -qO- http://127.0.0.1:3333/api/health || exit 1
 
-# start.sh: init postgres → create db → prisma push → node dist/main
-CMD ["/start.sh"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss 2>&1; node dist/main"]

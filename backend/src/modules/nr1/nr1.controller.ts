@@ -8,15 +8,14 @@ import { User } from '../../common/user.decorator';
 
 @ApiTags('NR-1')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
 @Controller('nr1')
 export class Nr1Controller {
   constructor(private readonly nr1Service: Nr1Service) {}
 
   @Post('assessments')
   @ApiOperation({ summary: 'Submeter avaliação psicossocial' })
-  submitAssessment(@User('id') userId: string, @Body() dto: SubmitAssessmentDto) {
-    return this.nr1Service.submitAssessment(userId, dto);
+  submitAssessment(@Body() dto: SubmitAssessmentDto) {
+    return this.nr1Service.submitAssessment('demo-user', dto);
   }
 
   @Get('assessments/:companyId')

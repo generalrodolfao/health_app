@@ -57,8 +57,8 @@ export class FacilitiesService {
       where: {
         active: true,
         OR: [
-          { name: { contains: query, mode: 'insensitive' } },
-          { address: { contains: query, mode: 'insensitive' } },
+          { name: { contains: query } },
+          { address: { contains: query } },
         ],
       },
       take: 10,

@@ -7,26 +7,25 @@ import { User } from '../../common/user.decorator';
 
 @ApiTags('Users')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('profile')
-  @ApiOperation({ summary: 'Obter perfil do usuário' })
-  getProfile(@User('id') userId: string) {
-    return this.usersService.getProfile(userId);
+  @ApiOperation({ summary: 'Obter perfil (demo)' })
+  getProfile() {
+    return this.usersService.getProfile('demo-user');
   }
 
   @Patch('profile')
   @ApiOperation({ summary: 'Atualizar perfil' })
-  updateProfile(@User('id') userId: string, @Body() dto: UpdateProfileDto) {
-    return this.usersService.updateProfile(userId, dto);
+  updateProfile(@Body() dto: UpdateProfileDto) {
+    return this.usersService.updateProfile('demo-user', dto);
   }
 
   @Delete('account')
   @ApiOperation({ summary: 'Excluir conta (LGPD)' })
-  deleteAccount(@User('id') userId: string) {
-    return this.usersService.deleteAccount(userId);
+  deleteAccount() {
+    return this.usersService.deleteAccount('demo-user');
   }
 }

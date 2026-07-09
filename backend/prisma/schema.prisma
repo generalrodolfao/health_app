@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -65,16 +65,16 @@ enum ActionStatus {
 }
 
 model User {
-  id                String    @id @default(uuid()) @db.Uuid
+  id                String    @id @default(uuid())
   name              String
   email             String    @unique
-  passwordHash      String
+  passwordHash      String    @default("x")
   phone             String?
   document          String?   @unique
   birthDate         DateTime?
   role              UserRole  @default(USER)
   plan              Plan      @default(FREE)
-  companyId         String?   @db.Uuid
+  companyId         String?
   company           Company?  @relation("CompanyEmployees", fields: [companyId], references: [id])
   emailVerifiedAt   DateTime?
   twoFactorEnabled  Boolean   @default(false)
@@ -96,12 +96,12 @@ model User {
 }
 
 model Company {
-  id              String     @id @default(uuid()) @db.Uuid
+  id              String     @id @default(uuid())
   name            String
   document        String     @unique
   size            String?
   plan            Plan       @default(BUSINESS)
-  modules         String[]   @default(["checkups"])
+  modules         String     @default("checkups")
   checkupPeriod   Int        @default(365)
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
@@ -116,9 +116,9 @@ model Company {
 }
 
 model Department {
-  id        String   @id @default(uuid()) @db.Uuid
+  id        String   @id @default(uuid())
   name      String
-  companyId String   @db.Uuid
+  companyId String
   company   Company  @relation(fields: [companyId], references: [id])
   assessments MentalHealthAssessment[]
   createdAt DateTime @default(now())
@@ -128,8 +128,8 @@ model Department {
 }
 
 model Checkup {
-  id             String          @id @default(uuid()) @db.Uuid
-  userId         String          @db.Uuid
+  id             String          @id @default(uuid())
+  userId         String
   user           User            @relation(fields: [userId], references: [id])
   year           Int
   targetDate     DateTime
@@ -146,8 +146,8 @@ model Checkup {
 }
 
 model CheckupItem {
-  id                String              @id @default(uuid()) @db.Uuid
-  checkupId         String              @db.Uuid
+  id                String              @id @default(uuid())
+  checkupId         String
   checkup           Checkup             @relation(fields: [checkupId], references: [id])
   examType          String
   professionalType  String
@@ -164,21 +164,21 @@ model CheckupItem {
 }
 
 model MentalHealthAssessment {
-  id                  String      @id @default(uuid()) @db.Uuid
-  userId              String      @db.Uuid
+  id                  String      @id @default(uuid())
+  userId              String
   user                User        @relation(fields: [userId], references: [id])
-  departmentId        String?     @db.Uuid
+  departmentId        String?
   department          Department? @relation(fields: [departmentId], references: [id])
-  companyId           String?     @db.Uuid
+  companyId           String?
   company             Company?    @relation(fields: [companyId], references: [id])
   assessedAt          DateTime    @default(now())
   overallRiskLevel    RiskLevel   @default(LOW)
-  psychologicalDemand Int?        @db.SmallInt
-  workControl         Int?        @db.SmallInt
-  socialSupport       Int?        @db.SmallInt
-  rewards             Int?        @db.SmallInt
-  violenceHarassment  Int?        @db.SmallInt
-  responses           Json?
+  psychologicalDemand Int?
+  workControl         Int?
+  socialSupport       Int?
+  rewards             Int?
+  violenceHarassment  Int?
+  responses           String?
   isAnonymous         Boolean     @default(true)
   createdAt           DateTime    @default(now())
 
@@ -186,8 +186,8 @@ model MentalHealthAssessment {
 }
 
 model MentalHealthAction {
-  id              String       @id @default(uuid()) @db.Uuid
-  companyId       String       @db.Uuid
+  id              String       @id @default(uuid())
+  companyId       String
   company         Company      @relation(fields: [companyId], references: [id])
   title           String
   description     String?
@@ -204,7 +204,7 @@ model MentalHealthAction {
 }
 
 model Facility {
-  id          String        @id @default(uuid()) @db.Uuid
+  id          String        @id @default(uuid())
   name        String
   type        FacilityType
   address     String
@@ -220,15 +220,14 @@ model Facility {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  @@index([lat, lng])
   @@map("facilities")
 }
 
 model Appointment {
-  id          String             @id @default(uuid()) @db.Uuid
-  userId      String             @db.Uuid
+  id          String             @id @default(uuid())
+  userId      String
   user        User               @relation(fields: [userId], references: [id])
-  facilityId  String             @db.Uuid
+  facilityId  String
   facility    Facility           @relation(fields: [facilityId], references: [id])
   date        DateTime
   status      AppointmentStatus  @default(SCHEDULED)
@@ -240,15 +239,14 @@ model Appointment {
 }
 
 model AuditLog {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String?  @db.Uuid
+  id          String   @id @default(uuid())
+  userId      String?
   action      String
   entity      String
   entityId    String?
-  details     Json?
+  details     String?
   ipAddress   String?
   createdAt   DateTime @default(now())
 
-  @@index([userId, createdAt])
   @@map("audit_logs")
 }

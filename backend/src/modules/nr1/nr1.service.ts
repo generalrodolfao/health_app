@@ -21,7 +21,7 @@ export class Nr1Service {
         socialSupport: scores.socialSupport ?? null,
         rewards: scores.rewards ?? null,
         violenceHarassment: scores.violenceHarassment ?? null,
-        responses: dto.responses,
+        responses: JSON.stringify(dto.responses),
         overallRiskLevel,
         isAnonymous: dto.isAnonymous ?? true,
       },

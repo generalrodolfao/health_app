@@ -8,42 +8,40 @@ import { User } from '../../common/user.decorator';
 
 @ApiTags('Checkups')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
 @Controller('checkups')
 export class CheckupsController {
   constructor(private readonly checkupsService: CheckupsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Listar checkups do usuário' })
-  findAll(@User('id') userId: string) {
-    return this.checkupsService.findByUser(userId);
+  @ApiOperation({ summary: 'Listar checkups (mock user)' })
+  findAll() {
+    return this.checkupsService.findByUser('demo-user');
   }
 
   @Get('timeline')
   @ApiOperation({ summary: 'Linha do tempo de checkups' })
-  timeline(@User('id') userId: string) {
-    return this.checkupsService.getTimeline(userId);
+  timeline() {
+    return this.checkupsService.getTimeline('demo-user');
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Detalhes do checkup' })
-  findOne(@Param('id') id: string, @User('id') userId: string) {
-    return this.checkupsService.findById(id, userId);
+  findOne(@Param('id') id: string) {
+    return this.checkupsService.findById(id, 'demo-user');
   }
 
   @Post()
   @ApiOperation({ summary: 'Criar novo checkup anual' })
-  create(@User('id') userId: string, @Body() dto: CreateCheckupDto) {
-    return this.checkupsService.create(userId, dto);
+  create(@Body() dto: CreateCheckupDto) {
+    return this.checkupsService.create('demo-user', dto);
   }
 
   @Patch('items/:itemId')
   @ApiOperation({ summary: 'Atualizar item do checkup' })
   updateItem(
     @Param('itemId') itemId: string,
-    @User('id') userId: string,
     @Body() dto: UpdateItemDto,
   ) {
-    return this.checkupsService.updateItem(itemId, userId, dto);
+    return this.checkupsService.updateItem(itemId, 'demo-user', dto);
   }
 }
