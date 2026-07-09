@@ -1,8 +1,7 @@
 node_modules
 **/node_modules
-dist
-.next
 **/dist
+**/.next
 coverage
 .git
 .gitignore
@@ -13,4 +12,3 @@ coverage
 infra
 docs
 skills
-frontend
