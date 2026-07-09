@@ -3,23 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
-}
-
-enum UserRole {
-  USER
-  COMPANY_ADMIN
-  PSYCHOLOGIST
-  DOCTOR
-  ADMIN
-}
-
-enum Plan {
-  FREE
-  PROFESSIONAL
-  BUSINESS
-  ENTERPRISE
 }
 
 enum CheckupStatus {
@@ -34,13 +19,6 @@ enum CheckupItemStatus {
   SCHEDULED
   COMPLETED
   SKIPPED
-}
-
-enum AppointmentStatus {
-  SCHEDULED
-  CONFIRMED
-  CANCELLED
-  COMPLETED
 }
 
 enum FacilityType {
@@ -65,146 +43,74 @@ enum ActionStatus {
 }
 
 model User {
-  id                String    @id @default(uuid())
-  name              String
-  email             String    @unique
-  passwordHash      String    @default("x")
-  phone             String?
-  document          String?   @unique
-  birthDate         DateTime?
-  role              UserRole  @default(USER)
-  plan              Plan      @default(FREE)
-  companyId         String?
-  company           Company?  @relation("CompanyEmployees", fields: [companyId], references: [id])
-  emailVerifiedAt   DateTime?
-  twoFactorEnabled  Boolean   @default(false)
-  twoFactorSecret   String?
-  emergencyName     String?
-  emergencyPhone    String?
-  healthPlan        String?
-  healthPlanNumber  String?
-  healthPlanExpiry  DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  deletedAt         DateTime?
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @default("x")
+  phone        String?
+  document     String?
+  birthDate    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
 
-  checkups          Checkup[]
-  assessments       MentalHealthAssessment[]
-  appointments      Appointment[]
+  checkups     Checkup[]
+  assessments  MentalHealthAssessment[]
 
   @@map("users")
 }
 
-model Company {
-  id              String     @id @default(uuid())
-  name            String
-  document        String     @unique
-  size            String?
-  plan            Plan       @default(BUSINESS)
-  modules         String     @default("checkups")
-  checkupPeriod   Int        @default(365)
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
-  deletedAt       DateTime?
-
-  employees         User[]                       @relation("CompanyEmployees")
-  departments       Department[]
-  assessments       MentalHealthAssessment[]
-  actions           MentalHealthAction[]
-
-  @@map("companies")
-}
-
-model Department {
-  id        String   @id @default(uuid())
-  name      String
-  companyId String
-  company   Company  @relation(fields: [companyId], references: [id])
-  assessments MentalHealthAssessment[]
-  createdAt DateTime @default(now())
-
-  @@unique([companyId, name])
-  @@map("departments")
-}
-
 model Checkup {
-  id             String          @id @default(uuid())
-  userId         String
-  user           User            @relation(fields: [userId], references: [id])
-  year           Int
-  targetDate     DateTime
-  status         CheckupStatus   @default(PENDING)
-  notes          String?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  deletedAt      DateTime?
+  id         String        @id @default(uuid())
+  userId     String
+  user       User          @relation(fields: [userId], references: [id])
+  year       Int
+  targetDate DateTime
+  status     CheckupStatus @default(PENDING)
+  notes      String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  deletedAt  DateTime?
 
-  items          CheckupItem[]
+  items      CheckupItem[]
 
   @@unique([userId, year])
   @@map("checkups")
 }
 
 model CheckupItem {
-  id                String              @id @default(uuid())
-  checkupId         String
-  checkup           Checkup             @relation(fields: [checkupId], references: [id])
-  examType          String
-  professionalType  String
-  category          String
-  status            CheckupItemStatus   @default(PENDING)
-  scheduledDate     DateTime?
-  completedDate     DateTime?
-  notes             String?
-  fileUrl           String?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  id               String            @id @default(uuid())
+  checkupId        String
+  checkup          Checkup           @relation(fields: [checkupId], references: [id])
+  examType         String
+  professionalType String
+  category         String
+  status           CheckupItemStatus @default(PENDING)
+  scheduledDate    DateTime?
+  completedDate    DateTime?
+  notes            String?
+  fileUrl          String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
   @@map("checkup_items")
 }
 
 model MentalHealthAssessment {
-  id                  String      @id @default(uuid())
-  userId              String
-  user                User        @relation(fields: [userId], references: [id])
-  departmentId        String?
-  department          Department? @relation(fields: [departmentId], references: [id])
-  companyId           String?
-  company             Company?    @relation(fields: [companyId], references: [id])
-  assessedAt          DateTime    @default(now())
-  overallRiskLevel    RiskLevel   @default(LOW)
-  psychologicalDemand Int?
-  workControl         Int?
-  socialSupport       Int?
-  rewards             Int?
-  violenceHarassment  Int?
-  responses           String?
-  isAnonymous         Boolean     @default(true)
-  createdAt           DateTime    @default(now())
+  id               String    @id @default(uuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id])
+  assessedAt       DateTime  @default(now())
+  overallRiskLevel RiskLevel @default(LOW)
+  responses        String?
+  isAnonymous      Boolean   @default(true)
+  createdAt        DateTime  @default(now())
 
   @@map("mental_health_assessments")
 }
 
-model MentalHealthAction {
-  id              String       @id @default(uuid())
-  companyId       String
-  company         Company      @relation(fields: [companyId], references: [id])
-  title           String
-  description     String?
-  riskDimension   String?
-  assignedTo      String?
-  dueDate         DateTime
-  status          ActionStatus @default(PENDING)
-  completedAt     DateTime?
-  evidenceUrl     String?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-
-  @@map("mental_health_actions")
-}
-
 model Facility {
-  id          String        @id @default(uuid())
+  id          String       @id @default(uuid())
   name        String
   type        FacilityType
   address     String
@@ -212,41 +118,27 @@ model Facility {
   lat         Float
   lng         Float
   openHours   String?
-  is24h       Boolean       @default(false)
-  rating      Float         @default(0)
-  ratingCount Int           @default(0)
-  active      Boolean       @default(true)
-  appointments Appointment[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  is24h       Boolean      @default(false)
+  rating      Float        @default(0)
+  ratingCount Int          @default(0)
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   @@map("facilities")
 }
 
-model Appointment {
-  id          String             @id @default(uuid())
-  userId      String
-  user        User               @relation(fields: [userId], references: [id])
-  facilityId  String
-  facility    Facility           @relation(fields: [facilityId], references: [id])
-  date        DateTime
-  status      AppointmentStatus  @default(SCHEDULED)
-  notes       String?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+model MentalHealthAction {
+  id            String       @id @default(uuid())
+  title         String
+  description   String?
+  riskDimension String?
+  assignedTo    String?
+  dueDate       DateTime
+  status        ActionStatus @default(PENDING)
+  completedAt   DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
-  @@map("appointments")
-}
-
-model AuditLog {
-  id          String   @id @default(uuid())
-  userId      String?
-  action      String
-  entity      String
-  entityId    String?
-  details     String?
-  ipAddress   String?
-  createdAt   DateTime @default(now())
-
-  @@map("audit_logs")
+  @@map("mental_health_actions")
 }

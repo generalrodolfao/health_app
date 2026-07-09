@@ -15,10 +15,10 @@ export class Nr1Controller {
     return this.nr1Service.submitAssessment('demo-user', dto);
   }
 
-  @Get('assessments/:companyId')
-  @ApiOperation({ summary: 'Listar avaliações da empresa' })
-  getAssessments(@Param('companyId') companyId: string) {
-    return this.nr1Service.getCompanyAssessments(companyId);
+  @Get('assessments')
+  @ApiOperation({ summary: 'Listar avaliações' })
+  getAssessments() {
+    return this.nr1Service.getAssessments();
   }
 
   @Get('dashboard/:companyId')
