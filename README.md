@@ -71,11 +71,26 @@ cp infra/.env.example .env
 docker compose -f infra/docker-compose.prod.yml up -d
 ```
 
-### Railway
-- Conecte o repositório no Railway
-- Adicione PostgreSQL plugin
-- Configure variáveis de ambiente
-- Deploy automático via GitHub
+### Railway (monorepo)
+
+**Backend service:**
+1. Conecte o repositório no Railway (Service: backend)
+2. Adicione **PostgreSQL plugin** (Railway fornece DATABASE_URL automaticamente)
+3. Em **Variables**, configure:
+   - `JWT_SECRET` → gere com `openssl rand -hex 32`
+   - `NODE_ENV` = `production`
+   - `CORS_ORIGIN` → URL do frontend (depois de criar o frontend service)
+4. `railway.json` já aponta para o `Dockerfile` na raiz, que faz build a partir do subdir `backend/`
+5. Deploy automático via GitHub push
+
+**Frontend service (opcional, Vercel recomendado para Next.js):**
+1. Crie outro Service no Railway (Service: frontend)
+2. Em **Settings → Build → Dockerfile Path**, defina como `Dockerfile.frontend`
+3. Em **Variables**, configure:
+   - `NEXT_PUBLIC_API_URL` → URL do backend (ex: `https://backend.up.railway.app/api`)
+4. Deploy automático
+
+> **Nota**: Para deployment do frontend, recomenda-se a Vercel (otimizada para Next.js). Importe o repositório, defina **Root Directory** para `frontend` e a Vercel detecta Next.js automaticamente.
 
 ## Documentação
 
