@@ -1,13 +1,10 @@
-import { Controller, Get, Post, Param, Body, UseGuards } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Param, Body } from '@nestjs/common';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Nr1Service } from './nr1.service';
 import { SubmitAssessmentDto } from './dto/submit-assessment.dto';
 import { CreateActionDto } from './dto/create-action.dto';
-import { User } from '../../common/user.decorator';
 
 @ApiTags('NR-1')
-@ApiBearerAuth()
 @Controller('nr1')
 export class Nr1Controller {
   constructor(private readonly nr1Service: Nr1Service) {}
@@ -25,7 +22,7 @@ export class Nr1Controller {
   }
 
   @Get('dashboard/:companyId')
-  @ApiOperation({ summary: 'Dashboard NR-1 da empresa' })
+  @ApiOperation({ summary: 'Dashboard NR-1' })
   getDashboard(@Param('companyId') companyId: string) {
     return this.nr1Service.getDashboard(companyId);
   }
@@ -37,13 +34,13 @@ export class Nr1Controller {
   }
 
   @Get('actions/:companyId')
-  @ApiOperation({ summary: 'Listar ações da empresa' })
+  @ApiOperation({ summary: 'Listar ações' })
   getActions(@Param('companyId') companyId: string) {
     return this.nr1Service.getActions(companyId);
   }
 
   @Get('history/:companyId')
-  @ApiOperation({ summary: 'Histórico de conformidade NR-1' })
+  @ApiOperation({ summary: 'Histórico NR-1' })
   getHistory(@Param('companyId') companyId: string) {
     return this.nr1Service.getHistory(companyId);
   }
