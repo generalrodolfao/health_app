@@ -1,0 +1,74 @@
+# ── Self-contained: PostgreSQL + Node in one container ──
+# Lightest possible: ~180MB total (node:22-alpine 150MB + postgresql 30MB)
+# No Railway PostgreSQL plugin needed. Persists data via Railway volume.
+#
+# Build:  docker build -f Dockerfile.railway -t healthapp .
+# Run:    docker run -p 3333:3333 -v healthapp-pgdata:/var/lib/postgresql/data healthapp
+
+# ---- Build Stage ----
+FROM node:22-alpine AS builder
+WORKDIR /app
+
+RUN apk add --no-cache openssl
+
+COPY backend/package.json backend/package-lock.json ./
+RUN npm ci && npm cache clean --force
+
+COPY backend/tsconfig.json backend/nest-cli.json ./
+COPY backend/src/ src/
+COPY backend/prisma/ prisma/
+
+RUN npx prisma generate
+RUN npm run build
+RUN npm prune --production
+
+# ---- Runtime Stage: Node + PostgreSQL ----
+FROM node:22-alpine AS runner
+
+# Install PostgreSQL (alpine package ~30MB) — fallback across alpine versions
+RUN (apk add --no-cache postgresql16 postgresql16-contrib 2>/dev/null || \
+     apk add --no-cache postgresql17 postgresql17-contrib 2>/dev/null || \
+     apk add --no-cache postgresql postgresql-contrib) \
+    && apk add --no-cache openssl wget \
+    && mkdir -p /var/run/postgresql /var/lib/postgresql/data \
+    && chown -R postgres:postgres /var/run/postgresql /var/lib/postgresql/data \
+    && chmod 700 /var/lib/postgresql/data
+
+# Create non-root app user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 --ingroup nodejs healthapp
+
+# Copy built app from builder
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/prisma ./prisma
+COPY backend/package.json ./
+
+# Copy startup script
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
+
+# ── Environment ──
+ENV NODE_ENV=production
+ENV PORT=3333
+
+# PostgreSQL config (internal, not exposed)
+ENV PGDATA=/var/lib/postgresql/data
+ENV PGPORT=5432
+ENV PGUSER=healthapp
+ENV PGDATABASE=healthapp
+
+# App connects to localhost postgres (same container)
+ENV DATABASE_URL=postgresql://healthapp@localhost:5432/healthapp?schema=public
+
+# Volume for postgres data persistence
+VOLUME ["/var/lib/postgresql/data"]
+
+EXPOSE 3333
+
+# Healthcheck: app responds even if DB is initializing
+HEALTHCHECK --interval=10s --timeout=5s --start-period=40s --retries=5 \
+  CMD wget -qO- http://127.0.0.1:3333/api/health || exit 1
+
+# start.sh: init postgres → create db → prisma push → node dist/main
+CMD ["/start.sh"]
