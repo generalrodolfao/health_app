@@ -43,7 +43,7 @@ export default function Nr1Page() {
   const handleSubmit = async () => {
     setStep('submitting');
     try {
-      await api.nr1.submitAssessment('', { responses });
+      await api.nr1.submitAssessment({ responses });
       const avg = Object.values(responses).reduce((a, b) => a + b, 0) / Object.values(responses).length;
       const level = avg >= 4 ? 'Alto' : avg >= 2.5 ? 'Médio' : 'Baixo';
       const color = avg >= 4 ? 'red' : avg >= 2.5 ? 'amber' : 'green';

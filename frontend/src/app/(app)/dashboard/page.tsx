@@ -3,29 +3,19 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Card, Button, Badge, LoadingCard, EmptyState, PageHeader } from '@/components/ui';
-import { api } from '@/lib/api';
-
-interface Checkup {
-  id: string;
-  year: number;
-  status: string;
-  items: { id: string; status: string; examType: string }[];
-}
+import { api, Checkup } from '@/lib/api';
 
 export default function DashboardPage() {
   const [checkups, setCheckups] = useState<Checkup[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
 
   useEffect(() => {
-    api.checkups.list('').then(setCheckups).catch(() => setError(true)).finally(() => setLoading(false));
+    api.checkups.list().then(setCheckups).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   const currentCheckup = checkups.find((c) => c.status !== 'COMPLETED');
   const completedCheckups = checkups.filter((c) => c.status === 'COMPLETED');
-  const currentProgress = currentCheckup
-    ? Math.round((currentCheckup.items.filter((i) => i.status === 'COMPLETED').length / currentCheckup.items.length) * 100) || 0
-    : 0;
+  const nextExam = currentCheckup?.items.find((i) => i.status !== 'COMPLETED');
 
   return (
     <>
@@ -37,15 +27,18 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
+          {/* KPIs */}
           <div className="grid gap-6 md:grid-cols-3">
             <Card>
               <p className="text-sm font-medium text-gray-600">Checkup {new Date().getFullYear()}</p>
-              <p className="mt-2 text-3xl font-bold text-primary-600">{currentProgress}%</p>
+              <p className="mt-2 text-3xl font-bold text-primary-600">
+                {currentCheckup?.progress ?? 0}%
+              </p>
               <div className="mt-3 h-2 w-full rounded-full bg-gray-100">
-                <div className="h-2 rounded-full bg-primary-600 transition-all" style={{ width: `${currentProgress}%` }} />
+                <div className="h-2 rounded-full bg-primary-600 transition-all" style={{ width: `${currentCheckup?.progress ?? 0}%` }} />
               </div>
               <p className="mt-2 text-xs text-gray-500">
-                {currentCheckup ? `${currentCheckup.items.filter((i) => i.status === 'COMPLETED').length}/${currentCheckup.items.length} exames` : 'Nenhum checkup ativo'}
+                {currentCheckup ? `${currentCheckup.completedItems}/${currentCheckup.totalItems} exames` : 'Nenhum checkup ativo'}
               </p>
             </Card>
 
@@ -58,21 +51,22 @@ export default function DashboardPage() {
             <Card>
               <p className="text-sm font-medium text-gray-600">Próximo Exame</p>
               <p className="mt-2 text-xl font-bold text-amber-600">
-                {currentCheckup?.items.find((i) => i.status !== 'COMPLETED')?.examType || 'Tudo em dia!'}
+                {nextExam?.examType || 'Tudo em dia!'}
               </p>
               <p className="mt-1 text-xs text-gray-500">
-                {currentCheckup?.items.find((i) => i.status !== 'COMPLETED') ? 'Pendente' : 'Nenhum exame pendente'}
+                {nextExam ? nextExam.professionalType : 'Nenhum exame pendente'}
               </p>
             </Card>
           </div>
 
+          {/* Histórico */}
           <div className="mt-8">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold">Histórico de Checkups</h2>
               <Link href="/checkups"><Button size="sm">Gerenciar</Button></Link>
             </div>
 
-            {checkups.length === 0 && !error ? (
+            {checkups.length === 0 ? (
               <EmptyState
                 icon="📋"
                 title="Nenhum checkup criado ainda"
@@ -81,35 +75,29 @@ export default function DashboardPage() {
               />
             ) : (
               <div className="space-y-3">
-                {checkups.map((c) => {
-                  const progress = c.items.length > 0
-                    ? Math.round((c.items.filter((i) => i.status === 'COMPLETED').length / c.items.length) * 100)
-                    : 0;
-                  return (
-                    <Card key={c.id} className="flex items-center justify-between !py-4">
-                      <div>
-                        <p className="font-medium">Checkup {c.year}</p>
-                        <p className="text-sm text-gray-500">
-                          {c.items.filter((i) => i.status === 'COMPLETED').length}/{c.items.length} exames
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="hidden w-24 sm:block">
-                          <div className="h-2 rounded-full bg-gray-100">
-                            <div className="h-2 rounded-full bg-primary-600" style={{ width: `${progress}%` }} />
-                          </div>
+                {checkups.map((c) => (
+                  <Card key={c.id} className="flex items-center justify-between !py-4">
+                    <div>
+                      <p className="font-medium">Checkup {c.year}</p>
+                      <p className="text-sm text-gray-500">{c.completedItems}/{c.totalItems} exames</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="hidden w-24 sm:block">
+                        <div className="h-2 rounded-full bg-gray-100">
+                          <div className="h-2 rounded-full bg-primary-600" style={{ width: `${c.progress}%` }} />
                         </div>
-                        <Badge color={c.status === 'COMPLETED' ? 'green' : 'amber'}>
-                          {c.status === 'COMPLETED' ? 'Completo' : progress > 0 ? 'Em andamento' : 'Pendente'}
-                        </Badge>
                       </div>
-                    </Card>
-                  );
-                })}
+                      <Badge color={c.status === 'COMPLETED' ? 'green' : c.progress > 0 ? 'amber' : 'gray'}>
+                        {c.status === 'COMPLETED' ? 'Completo' : c.progress > 0 ? 'Em andamento' : 'Pendente'}
+                      </Badge>
+                    </div>
+                  </Card>
+                ))}
               </div>
             )}
           </div>
 
+          {/* Atalhos */}
           <div className="mt-8 grid gap-6 md:grid-cols-2">
             <Card title="NR-1 Saúde Mental" icon="🧠">
               <p className="text-sm text-gray-600">Avalie seus riscos psicossociais em conformidade com a NR-1.</p>

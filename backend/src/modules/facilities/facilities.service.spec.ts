@@ -25,6 +25,6 @@ describe('FacilitiesService', () => {
     ]);
     const result = await service.getEmergencyHospital(-23.55, -46.63);
     expect(result).toBeTruthy();
-    expect(result.id).toBe('1');
+    expect(result!.id).toBe('1');
   });
 });

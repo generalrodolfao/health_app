@@ -10,11 +10,11 @@ export class CheckupsController {
   constructor(private readonly checkupsService: CheckupsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Listar checkups' })
+  @ApiOperation({ summary: 'Listar checkups do usuário demo' })
   findAll() { return this.checkupsService.findByUser('demo-user'); }
 
   @Get('timeline')
-  @ApiOperation({ summary: 'Linha do tempo' })
+  @ApiOperation({ summary: 'Linha do tempo de checkups' })
   timeline() { return this.checkupsService.getTimeline('demo-user'); }
 
   @Get(':id')
@@ -26,7 +26,7 @@ export class CheckupsController {
   create(@Body() dto: CreateCheckupDto) { return this.checkupsService.create('demo-user', dto); }
 
   @Patch('items/:itemId')
-  @ApiOperation({ summary: 'Atualizar item' })
+  @ApiOperation({ summary: 'Atualizar item do checkup (concluir, agendar, etc)' })
   updateItem(@Param('itemId') itemId: string, @Body() dto: UpdateItemDto) {
     return this.checkupsService.updateItem(itemId, 'demo-user', dto);
   }

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, Button, Badge, PageHeader, EmptyState, Spinner } from '@/components/ui';
-import { api } from '@/lib/api';
+import { api, Checkup, CheckupItem } from '@/lib/api';
 
 const EXAMS_BY_CATEGORY: Record<string, { exam: string; professional: string }[]> = {
   Rotina: [
@@ -33,12 +33,12 @@ const EXAMS_BY_CATEGORY: Record<string, { exam: string; professional: string }[]
   ],
 };
 
-interface Checkup {
-  id: string;
-  year: number;
-  status: string;
-  items: { id: string; examType: string; professionalType: string; category: string; status: string }[];
-}
+const STATUS_LABELS: Record<string, string> = {
+  PENDING: 'Pendente',
+  SCHEDULED: 'Agendado',
+  COMPLETED: 'Concluído',
+  SKIPPED: 'Ignorado',
+};
 
 export default function CheckupsPage() {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
@@ -46,11 +46,19 @@ export default function CheckupsPage() {
   const [checkups, setCheckups] = useState<Checkup[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
-  useEffect(() => {
-    api.checkups.list('').then(setCheckups).catch(() => {}).finally(() => setLoading(false));
+  const loadCheckups = useCallback(async () => {
+    try {
+      const data = await api.checkups.list();
+      setCheckups(data);
+    } catch { setCheckups([]); }
+    finally { setLoading(false); }
   }, []);
+
+  useEffect(() => { loadCheckups(); }, [loadCheckups]);
 
   const toggleItem = (key: string) => {
     setSelectedItems((prev) => {
@@ -70,10 +78,10 @@ export default function CheckupsPage() {
         const examData = EXAMS_BY_CATEGORY[category].find((e) => e.exam === exam)!;
         return { examType: exam, professionalType: examData.professional, category };
       });
-      await api.checkups.create('', { year, targetDate: `${year}-12-31`, items });
-      const updated = await api.checkups.list('');
-      setCheckups(updated);
+      await api.checkups.create({ year, targetDate: `${year}-12-31`, items });
+      await loadCheckups();
       setSelectedItems(new Set());
+      setShowCreateForm(false);
     } catch (e: any) {
       setError(e.message || 'Erro ao criar checkup');
     } finally {
@@ -81,54 +89,126 @@ export default function CheckupsPage() {
     }
   };
 
-  const existingForYear = checkups.find((c) => c.year === year);
+  const handleToggleComplete = async (item: CheckupItem) => {
+    setUpdatingItemId(item.id);
+    try {
+      const newStatus = item.status === 'COMPLETED' ? 'PENDING' : 'COMPLETED';
+      await api.checkups.updateItem(item.id, {
+        status: newStatus,
+        ...(newStatus === 'COMPLETED' ? {} : {}),
+      });
+      await loadCheckups();
+    } catch (e: any) {
+      setError(e.message || 'Erro ao atualizar exame');
+    } finally {
+      setUpdatingItemId(null);
+    }
+  };
+
+  const currentYearCheckup = checkups.find((c) => c.year === year);
+  const otherCheckups = checkups.filter((c) => c.year !== year);
 
   return (
     <>
       <PageHeader
         title="Meus Checkups"
-        subtitle={existingForYear ? `Você já tem um checkup para ${year}` : `Selecione os exames para ${year}`}
-      />
+        subtitle="Acompanhe seus exames anuais"
+      >
+        {currentYearCheckup && !showCreateForm && (
+          <Button size="sm" variant="secondary" onClick={() => setShowCreateForm(true)}>+ Novo para outro ano</Button>
+        )}
+      </PageHeader>
 
       {loading ? (
         <div className="flex justify-center py-12"><Spinner className="h-8 w-8 text-primary-600" /></div>
       ) : (
         <>
-          {existingForYear && (
-            <Card className="mb-6 border-primary-200 bg-primary-50">
-              <div className="flex items-center justify-between">
+          {error && <p className="mb-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{error}</p>}
+
+          {/* Checkup do ano atual */}
+          {currentYearCheckup && !showCreateForm ? (
+            <Card>
+              <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-primary-900">Checkup {existingForYear.year}</p>
-                  <p className="text-sm text-primary-700">
-                    {existingForYear.items.filter((i) => i.status === 'COMPLETED').length}/{existingForYear.items.length} exames concluídos
+                  <h2 className="text-xl font-bold">Checkup {currentYearCheckup.year}</h2>
+                  <p className="text-sm text-gray-500">
+                    {currentYearCheckup.completedItems}/{currentYearCheckup.totalItems} exames concluídos
                   </p>
                 </div>
-                <Badge color={existingForYear.status === 'COMPLETED' ? 'green' : 'amber'}>
-                  {existingForYear.status === 'COMPLETED' ? 'Completo' : 'Em andamento'}
-                </Badge>
-              </div>
-              <div className="mt-3 space-y-2">
-                {existingForYear.items.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between rounded-lg bg-white/60 px-3 py-2">
-                    <div>
-                      <span className="text-sm font-medium">{item.examType}</span>
-                      <span className="ml-2 text-xs text-gray-500">{item.professionalType}</span>
+                <div className="flex items-center gap-3">
+                  <div className="w-32">
+                    <div className="h-2 rounded-full bg-gray-100">
+                      <div className="h-2 rounded-full bg-primary-600 transition-all" style={{ width: `${currentYearCheckup.progress}%` }} />
                     </div>
-                    <Badge color={item.status === 'COMPLETED' ? 'green' : 'gray'}>
-                      {item.status === 'COMPLETED' ? '✓ Concluído' : 'Pendente'}
-                    </Badge>
+                  </div>
+                  <Badge color={currentYearCheckup.status === 'COMPLETED' ? 'green' : 'amber'}>
+                    {currentYearCheckup.status === 'COMPLETED' ? 'Completo' : 'Em andamento'}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Items agrupados por categoria */}
+              <div className="space-y-4">
+                {Object.entries(
+                  currentYearCheckup.items.reduce<Record<string, CheckupItem[]>>((acc, item) => {
+                    (acc[item.category] = acc[item.category] || []).push(item);
+                    return acc;
+                  }, {}),
+                ).map(([category, items]) => (
+                  <div key={category}>
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">{category}</h3>
+                    <div className="space-y-2">
+                      {items.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3"
+                        >
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => handleToggleComplete(item)}
+                              disabled={updatingItemId === item.id}
+                              className={`flex h-6 w-6 items-center justify-center rounded-full border-2 transition-colors ${
+                                item.status === 'COMPLETED'
+                                  ? 'border-green-500 bg-green-500 text-white'
+                                  : 'border-gray-300 hover:border-primary-500'
+                              }`}
+                              aria-label="Alternar conclusão"
+                            >
+                              {item.status === 'COMPLETED' && '✓'}
+                              {updatingItemId === item.id && <Spinner className="h-3 w-3" />}
+                            </button>
+                            <div>
+                              <p className={`text-sm font-medium ${item.status === 'COMPLETED' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                                {item.examType}
+                              </p>
+                              <p className="text-xs text-gray-500">{item.professionalType}</p>
+                            </div>
+                          </div>
+                          <Badge color={item.status === 'COMPLETED' ? 'green' : item.status === 'SCHEDULED' ? 'blue' : 'gray'}>
+                            {STATUS_LABELS[item.status] || item.status}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
             </Card>
-          )}
+          ) : (
+            /* Formulário de criação */
+            <Card>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-xl font-bold">Criar Checkup {year}</h2>
+                {showCreateForm && (
+                  <Button size="sm" variant="ghost" onClick={() => setShowCreateForm(false)}>Cancelar</Button>
+                )}
+              </div>
 
-          {!existingForYear && (
-            <>
               <div className="space-y-6">
                 {Object.entries(EXAMS_BY_CATEGORY).map(([category, exams]) => (
-                  <Card key={category} title={category}>
-                    <div className="space-y-3">
+                  <div key={category}>
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">{category}</h3>
+                    <div className="space-y-2">
                       {exams.map((item) => {
                         const key = `${category}|${item.exam}`;
                         const selected = selectedItems.has(key);
@@ -153,22 +233,48 @@ export default function CheckupsPage() {
                         );
                       })}
                     </div>
-                  </Card>
+                  </div>
                 ))}
               </div>
 
-              {error && <p className="mt-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{error}</p>}
-
-              <div className="mt-8 flex items-center justify-between rounded-xl border bg-white p-4 shadow-sm">
+              <div className="mt-6 flex items-center justify-between rounded-xl bg-gray-50 p-4">
                 <p className="text-sm text-gray-600">{selectedItems.size} exame(s) selecionado(s)</p>
                 <Button onClick={handleCreate} disabled={selectedItems.size === 0 || creating}>
-                  {creating ? <Spinner className="h-4 w-4" /> : `Criar Checkup ${year}`}
+                  {creating ? <Spinner className="h-4 w-4" /> : 'Criar Checkup'}
                 </Button>
               </div>
-            </>
+            </Card>
           )}
 
-          {checkups.length === 0 && !loading && !existingForYear && (
+          {/* Checkups de anos anteriores */}
+          {otherCheckups.length > 0 && (
+            <div className="mt-8">
+              <h2 className="mb-4 text-lg font-semibold">Anos Anteriores</h2>
+              <div className="space-y-3">
+                {otherCheckups.map((c) => (
+                  <Card key={c.id} className="flex items-center justify-between !py-4">
+                    <div>
+                      <p className="font-medium">Checkup {c.year}</p>
+                      <p className="text-sm text-gray-500">{c.completedItems}/{c.totalItems} exames</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="hidden w-24 sm:block">
+                        <div className="h-2 rounded-full bg-gray-100">
+                          <div className="h-2 rounded-full bg-primary-600" style={{ width: `${c.progress}%` }} />
+                        </div>
+                      </div>
+                      <Badge color={c.status === 'COMPLETED' ? 'green' : 'amber'}>
+                        {c.status === 'COMPLETED' ? 'Completo' : 'Em andamento'}
+                      </Badge>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Empty state */}
+          {checkups.length === 0 && !loading && (
             <div className="mt-8">
               <EmptyState
                 icon="📋"

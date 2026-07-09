@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { Card, Button, Badge, PageHeader, Spinner, EmptyState } from '@/components/ui';
+import { api, Facility } from '@/lib/api';
 
 const MapWithNoSSR = dynamic(() => import('@/components/Map'), {
   ssr: false,
@@ -14,18 +15,6 @@ const MapWithNoSSR = dynamic(() => import('@/components/Map'), {
 });
 
 type FacilityType = 'HOSPITAL' | 'PHARMACY' | 'CLINIC' | 'LABORATORY';
-
-interface Facility {
-  id: string;
-  name: string;
-  type: FacilityType;
-  address: string;
-  phone?: string;
-  lat: number;
-  lng: number;
-  distance: number;
-  is24h?: boolean;
-}
 
 export default function MapPage() {
   const [facilities, setFacilities] = useState<Facility[]>([]);
@@ -53,11 +42,8 @@ export default function MapPage() {
       setLoading(true);
       setError('');
       try {
-        const params = new URLSearchParams({ lat: String(userLocation[0]), lng: String(userLocation[1]), radius: '10' });
-        if (filterType) params.set('type', filterType);
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/facilities/nearby?${params}`);
-        if (!res.ok) throw new Error('Falha ao carregar');
-        setFacilities(await res.json());
+        const data = await api.facilities.nearby(userLocation[0], userLocation[1], 10, filterType || undefined);
+        setFacilities(data);
       } catch (e: any) {
         setError(e.message || 'Erro ao carregar unidades');
       } finally {
@@ -70,21 +56,18 @@ export default function MapPage() {
   const handleEmergency = async () => {
     setShowEmergency(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/facilities/emergency?lat=${userLocation[0]}&lng=${userLocation[1]}`);
-      if (res.ok) {
-        const hospital = await res.json();
-        if (hospital) {
-          setFacilities([hospital]);
-          setFilterType('HOSPITAL');
-        }
+      const hospital = await api.facilities.emergency(userLocation[0], userLocation[1]);
+      if (hospital) {
+        setFacilities([hospital]);
+        setFilterType('HOSPITAL');
       }
     } catch {}
   };
 
-  const typeLabels: Record<FacilityType, string> = {
+  const typeLabels: Record<string, string> = {
     HOSPITAL: 'Hospital', PHARMACY: 'Farmácia', CLINIC: 'Clínica', LABORATORY: 'Laboratório',
   };
-  const typeColors: Record<FacilityType, 'red' | 'green' | 'blue' | 'purple'> = {
+  const typeColors: Record<string, 'red' | 'green' | 'blue' | 'purple' | 'gray'> = {
     HOSPITAL: 'red', PHARMACY: 'green', CLINIC: 'blue', LABORATORY: 'purple',
   };
 
