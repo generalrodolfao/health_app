@@ -2,13 +2,19 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "DOCKERFILE",
-    "dockerfilePath": "./backend/Dockerfile"
+    "dockerfilePath": "backend/Dockerfile",
+    "watchPatterns": ["backend/src/**", "backend/prisma/**"]
   },
   "deploy": {
-    "startCommand": "npx prisma generate && npx prisma migrate deploy && node dist/main",
+    "startCommand": "npx prisma db push --accept-data-loss && node dist/main",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
+  },
+  "environments": {
+    "DATABASE_URL": { "description": "PostgreSQL connection string (Railway plugin)" },
+    "JWT_SECRET": { "description": "JWT secret, min 32 chars (openssl rand -hex 32)" },
+    "CORS_ORIGIN": { "description": "Frontend URL (https://your-app.up.railway.app)" }
   }
 }

@@ -1,7 +1,9 @@
 services:
   postgres:
-    image: postgis/postgis:16-3.4
+    image: postgres:16-alpine
     restart: always
+    networks:
+      - internal
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
@@ -15,10 +17,14 @@ services:
       retries: 5
 
   backend:
-    image: ghcr.io/${GITHUB_REPOSITORY}/backend:latest
+    image: ${BACKEND_IMAGE:-healthapp-backend:latest}
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
     restart: always
-    ports:
-      - "3333:3333"
+    networks:
+      - internal
+      - proxy
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}?schema=public
       JWT_SECRET: ${JWT_SECRET}
@@ -29,21 +35,53 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: sh -c "npx prisma generate && npx prisma migrate deploy && node dist/main"
+    command: sh -c "npx prisma db push --accept-data-loss && node dist/main"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=healthapp_proxy"
+      - "traefik.http.routers.healthapp-api.rule=Host(`api.${DOMAIN}`)"
+      - "traefik.http.routers.healthapp-api.entrypoints=websecure"
+      - "traefik.http.routers.healthapp-api.tls=true"
+      - "traefik.http.routers.healthapp-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.healthapp-api.loadbalancer.server.port=3333"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3333/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
 
   frontend:
-    image: ghcr.io/${GITHUB_REPOSITORY}/frontend:latest
+    image: ${FRONTEND_IMAGE:-healthapp-frontend:latest}
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=https://api.${DOMAIN}
     restart: always
-    ports:
-      - "3000:3000"
-    environment:
-      NEXT_PUBLIC_API_URL: https://api.${DOMAIN}
+    networks:
+      - internal
+      - proxy
     depends_on:
       - backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=healthapp_proxy"
+      - "traefik.http.routers.healthapp-web.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.healthapp-web.entrypoints=websecure"
+      - "traefik.http.routers.healthapp-web.tls=true"
+      - "traefik.http.routers.healthapp-web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.healthapp-web.loadbalancer.server.port=3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
 
   traefik:
-    image: traefik:v3.1
+    image: traefik:v3.2
     restart: always
+    networks:
+      - proxy
     ports:
       - "80:80"
       - "443:443"
@@ -51,8 +89,16 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik.yml:/traefik.yml:ro
       - traefik_data:/etc/traefik/acme
+    command:
+      - "--certificatesresolvers.letsencrypt.acme.email=${LETSENCRYPT_EMAIL}"
     labels:
-      - "traefik.enable=true"
+      - "traefik.enable=false"
+
+networks:
+  internal:
+    driver: bridge
+  proxy:
+    name: healthapp_proxy
 
 volumes:
   postgres_data:

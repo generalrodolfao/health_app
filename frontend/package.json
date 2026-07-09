@@ -42,9 +42,12 @@
   },
   "jest": {
     "testEnvironment": "jsdom",
-    "setupFilesAfterSetup": ["<rootDir>/jest.setup.ts"],
+    "setupFilesAfterEach": ["<rootDir>/jest.setup.ts"],
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/src/$1"
+    },
+    "transform": {
+      "^.+\\.(t|j)sx?$": "ts-jest"
     }
   }
 }

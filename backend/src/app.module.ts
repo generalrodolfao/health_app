@@ -22,6 +22,7 @@ import { FacilitiesModule } from './modules/facilities/facilities.module';
     Nr1Module,
     FacilitiesModule,
   ],
+  controllers: [HealthController],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],

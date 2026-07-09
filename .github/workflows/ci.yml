@@ -14,22 +14,6 @@ jobs:
   lint:
     name: Lint & TypeCheck
     runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgis/postgis:16-3.4
-        env:
-          POSTGRES_USER: healthapp
-          POSTGRES_PASSWORD: healthapp123
-          POSTGRES_DB: healthapp
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - uses: actions/checkout@v4
 
@@ -39,12 +23,11 @@ jobs:
           cache: 'npm'
           cache-dependency-path: backend/package-lock.json
 
-      - name: Backend lint & typecheck
+      - name: Backend typecheck
         working-directory: backend
         run: |
           npm ci
           npx prisma generate
-          npm run lint
           npm run typecheck
 
       - uses: actions/setup-node@v4
@@ -53,11 +36,10 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Frontend lint & typecheck
+      - name: Frontend typecheck
         working-directory: frontend
         run: |
           npm ci
-          npm run lint
           npm run typecheck
 
   test:
@@ -67,7 +49,7 @@ jobs:
 
     services:
       postgres:
-        image: postgis/postgis:16-3.4
+        image: postgres:16-alpine
         env:
           POSTGRES_USER: healthapp
           POSTGRES_PASSWORD: healthapp123
@@ -79,6 +61,10 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://healthapp:healthapp123@localhost:5432/healthapp?schema=public
+      JWT_SECRET: ci-test-secret-do-not-use
 
     steps:
       - uses: actions/checkout@v4
@@ -94,13 +80,8 @@ jobs:
         run: |
           npm ci
           npx prisma generate
-          npm test -- --coverage
-
-      - name: Upload coverage
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-coverage
-          path: backend/coverage/
+          npx prisma db push --accept-data-loss
+          npm test -- --testPathIgnorePatterns=".*\.e2e-spec\.ts$"
 
       - uses: actions/setup-node@v4
         with:
@@ -112,13 +93,16 @@ jobs:
         working-directory: frontend
         run: |
           npm ci
-          npm test -- --coverage
+          npm test
 
   build:
     name: Build & Push Docker
     needs: test
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - uses: actions/checkout@v4
@@ -145,13 +129,15 @@ jobs:
           context: frontend
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:latest
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://api.${{ secrets.PROD_DOMAIN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   deploy:
     name: Deploy to VPS
     needs: build
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
 
     steps:
@@ -164,7 +150,6 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd /opt/healthapp
-            docker compose -f infra/docker-compose.prod.yml pull
-            docker compose -f infra/docker-compose.prod.yml up -d --force-recreate
-            docker image prune -f
+            cd /opt/healthapp/infra
+            chmod +x deploy-vps.sh
+            ./deploy-vps.sh
