@@ -31,9 +31,9 @@ echo "[start] Pushing Prisma schema..."
 export DATABASE_URL="postgresql://$PGUSER@localhost:$PGPORT/$PGDATABASE?schema=public"
 npx prisma db push --accept-data-loss 2>&1 | tail -3
 
-# ── 5. Seed demo data (idempotent) ──
+# ── 5. Seed demo data (plain JS, no ts-node needed) ──
 echo "[start] Seeding demo data..."
-npx prisma db seed 2>&1 | tail -3 || echo "[start] seed skipped"
+node prisma/seed.js 2>&1 | tail -5 || echo "[start] seed failed (non-fatal)"
 
 # ── 6. Start Node app ──
 echo "[start] Starting API on port ${PORT:-3333}..."
