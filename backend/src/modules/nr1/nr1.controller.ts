@@ -7,41 +7,29 @@ import { CreateActionDto } from './dto/create-action.dto';
 @ApiTags('NR-1')
 @Controller('nr1')
 export class Nr1Controller {
-  constructor(private readonly nr1Service: Nr1Service) {}
+  constructor(private readonly svc: Nr1Service) {}
+
+  @Get('questions')
+  @ApiOperation({ summary: 'Perguntas da avaliação (escala PHQ-9)' })
+  getQuestions() { return this.svc.getQuestions(); }
 
   @Post('assessments')
   @ApiOperation({ summary: 'Submeter avaliação psicossocial' })
-  submitAssessment(@Body() dto: SubmitAssessmentDto) {
-    return this.nr1Service.submitAssessment('demo-user', dto);
-  }
+  submit(@Body() dto: SubmitAssessmentDto) { return this.svc.submitAssessment('demo-user', dto); }
 
-  @Get('assessments')
-  @ApiOperation({ summary: 'Listar avaliações' })
-  getAssessments() {
-    return this.nr1Service.getAssessments();
-  }
+  @Get('history')
+  @ApiOperation({ summary: 'Histórico de avaliações' })
+  history() { return this.svc.getHistory('demo-user'); }
 
-  @Get('dashboard/:companyId')
+  @Get('dashboard')
   @ApiOperation({ summary: 'Dashboard NR-1' })
-  getDashboard(@Param('companyId') companyId: string) {
-    return this.nr1Service.getDashboard(companyId);
-  }
+  dashboard() { return this.svc.getDashboard(); }
 
-  @Post('actions/:companyId')
+  @Post('actions')
   @ApiOperation({ summary: 'Criar plano de ação' })
-  createAction(@Param('companyId') companyId: string, @Body() dto: CreateActionDto) {
-    return this.nr1Service.createAction(companyId, dto);
-  }
+  createAction(@Body() dto: CreateActionDto) { return this.svc.createAction(dto); }
 
-  @Get('actions/:companyId')
+  @Get('actions')
   @ApiOperation({ summary: 'Listar ações' })
-  getActions(@Param('companyId') companyId: string) {
-    return this.nr1Service.getActions(companyId);
-  }
-
-  @Get('history/:companyId')
-  @ApiOperation({ summary: 'Histórico NR-1' })
-  getHistory(@Param('companyId') companyId: string) {
-    return this.nr1Service.getHistory(companyId);
-  }
+  getActions() { return this.svc.getActions(); }
 }

@@ -1,129 +1,168 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, Button, Badge, PageHeader, Spinner } from '@/components/ui';
-import { api } from '@/lib/api';
+import { api, Nr1Question, Nr1Result, Nr1HistoryItem } from '@/lib/api';
 
-interface Question {
-  id: keyof Responses;
-  label: string;
-  question: string;
-}
-
-const QUESTIONS: Question[] = [
-  { id: 'psychologicalDemand', label: 'Exigências Psicológicas', question: 'Com que frequência você precisa trabalhar muito rápido?' },
-  { id: 'workControl', label: 'Controle sobre o Trabalho', question: 'Você tem influência sobre como organizar suas tarefas?' },
-  { id: 'socialSupport', label: 'Apoio Social', question: 'Você recebe apoio dos colegas quando precisa?' },
-  { id: 'rewards', label: 'Compensações', question: 'Você considera seu reconhecimento profissional adequado?' },
-  { id: 'violenceHarassment', label: 'Violência e Assédio', question: 'Você presenciou ou sofreu situações de assédio no trabalho?' },
-];
-
-const LABELS = ['Muito Baixo', 'Baixo', 'Médio', 'Alto', 'Muito Alto'];
-type Responses = Record<string, number>;
+const riskColors: Record<string, 'green'|'amber'|'red'> = { LOW: 'green', MEDIUM: 'amber', HIGH: 'red', CRITICAL: 'red' };
+const riskLabels: Record<string, string> = { LOW: 'Baixo', MEDIUM: 'Médio', HIGH: 'Alto', CRITICAL: 'Grave' };
 
 export default function Nr1Page() {
-  const [responses, setResponses] = useState<Responses>({
-    psychologicalDemand: 1,
-    workControl: 1,
-    socialSupport: 1,
-    rewards: 1,
-    violenceHarassment: 1,
-  });
-  const [step, setStep] = useState<'assess' | 'submitting' | 'done'>('assess');
-  const [result, setResult] = useState<{ level: string; color: 'green' | 'amber' | 'red' } | null>(null);
+  const [questions, setQuestions] = useState<Nr1Question[]>([]);
+  const [step, setStep] = useState<'intro' | 'quiz' | 'submitting' | 'result' | 'error'>('intro');
+  const [currentQ, setCurrentQ] = useState(0);
+  const [responses, setResponses] = useState<Record<string, number>>({});
+  const [result, setResult] = useState<Nr1Result | null>(null);
+  const [history, setHistory] = useState<Nr1HistoryItem[]>([]);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const updateResponse = (key: string, value: number) => {
-    setResponses((prev) => ({ ...prev, [key]: value }));
+  useEffect(() => {
+    api.nr1.questions().then(setQuestions).catch(() => {});
+    api.nr1.history().then(setHistory).catch(() => {});
+  }, []);
+
+  const start = () => { setStep('quiz'); setCurrentQ(0); setResponses({}); };
+  const answer = (value: number) => {
+    const newResponses = { ...responses, [String(currentQ)]: value };
+    setResponses(newResponses);
+    if (currentQ < questions.length - 1) setCurrentQ(currentQ + 1);
+    else submit(newResponses);
   };
+  const goBack = () => { if (currentQ > 0) setCurrentQ(currentQ - 1); };
 
-  const allAnswered = Object.values(responses).every((v) => v >= 1 && v <= 5);
-  const answeredCount = Object.values(responses).filter((v) => v >= 1).length;
-  const progress = Math.round((answeredCount / QUESTIONS.length) * 100);
-
-  const handleSubmit = async () => {
+  const submit = async (resp: Record<string, number>) => {
     setStep('submitting');
     try {
-      await api.nr1.submitAssessment({ responses });
-      const avg = Object.values(responses).reduce((a, b) => a + b, 0) / Object.values(responses).length;
-      const level = avg >= 4 ? 'Alto' : avg >= 2.5 ? 'Médio' : 'Baixo';
-      const color = avg >= 4 ? 'red' : avg >= 2.5 ? 'amber' : 'green';
-      setResult({ level, color });
-      setStep('done');
-    } catch {
-      setStep('assess');
+      const r = await api.nr1.submit({ responses: resp });
+      setResult(r); setStep('result');
+      api.nr1.history().then(setHistory).catch(() => {});
+    } catch (e: any) {
+      setErrorMsg(e.message); setStep('error'); setResponses(resp);
     }
   };
 
-  if (step === 'done' && result) {
+  // INTRO
+  if (step === 'intro') {
     return (
       <>
-        <PageHeader title="Avaliação Concluída" />
-        <Card className="text-center">
-          <div className="mb-4 text-4xl">✅</div>
-          <p className="text-lg font-medium">Suas respostas foram registradas anonimamente.</p>
-          <div className="mt-6 inline-block">
-            <Badge color={result.color} className="text-sm px-4 py-1.5">
-              Risco Psicossocial: {result.level}
-            </Badge>
+        <PageHeader title="Saúde Mental" subtitle="Avaliação de risco psicossocial (PHQ-9)" />
+        <Card>
+          <div className="space-y-4">
+            <div className="rounded-lg bg-blue-50 p-4 text-sm text-blue-900">
+              <p className="font-semibold">Sobre esta avaliação</p>
+              <ul className="mt-2 space-y-1 text-blue-800">
+                <li>• Baseada na escala PHQ-9, validada cientificamente</li>
+                <li>• 9 perguntas rápidas (~2 minutos)</li>
+                <li>• Suas respostas são anônimas</li>
+                <li>• O resultado não é diagnóstico clínico</li>
+              </ul>
+            </div>
+            <p className="text-sm text-gray-600">Ao final você verá seu nível de risco e recomendações personalizadas.</p>
+            <Button onClick={start} size="lg" fullWidth>Iniciar Avaliação</Button>
           </div>
-          <p className="mt-4 text-xs text-gray-500">Seu gestor verá apenas dados agregados do grupo.</p>
-          <Button className="mt-6" variant="secondary" onClick={() => { setStep('assess'); setResult(null); }}>
-            Fazer Nova Avaliação
-          </Button>
+        </Card>
+
+        {history.length > 0 && (
+          <div className="mt-6">
+            <h2 className="mb-3 text-sm font-semibold text-gray-700">Avaliações Anteriores</h2>
+            <div className="space-y-2">
+              {history.map((h) => (
+                <Card key={h.id} className="flex items-center justify-between !py-3">
+                  <span className="text-sm text-gray-600">{new Date(h.assessedAt).toLocaleDateString('pt-BR')}</span>
+                  <Badge color={riskColors[h.overallRiskLevel] || 'gray'}>{riskLabels[h.overallRiskLevel] || h.overallRiskLevel}</Badge>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // QUIZ
+  if (step === 'quiz' || step === 'submitting') {
+    const q = questions[currentQ];
+    if (!q) return <div className="flex justify-center py-12"><Spinner className="h-8 w-8 text-primary-600" /></div>;
+    const progress = Math.round(((currentQ + 1) / questions.length) * 100);
+
+    return (
+      <>
+        <PageHeader title="Avaliação NR-1" subtitle={`${currentQ + 1} de ${questions.length}`} />
+        <div className="mb-6"><div className="h-2 rounded-full bg-gray-100"><div className="h-2 rounded-full bg-primary-600 transition-all" style={{ width: `${progress}%` }} /></div></div>
+
+        <Card>
+          <p className="text-lg font-medium text-gray-900">{q.question}</p>
+          <p className="mt-1 text-sm text-gray-500">Nas últimas 2 semanas, com que frequência?</p>
+          <div className="mt-6 space-y-3">
+            {q.options.map((opt) => (
+              <button key={opt.value} onClick={() => answer(opt.value)} disabled={step === 'submitting'}
+                className={`w-full rounded-lg border-2 p-4 text-left text-sm font-medium transition-colors ${
+                  responses[String(currentQ)] === opt.value ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-200 hover:border-primary-300 hover:bg-gray-50'
+                }`}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </Card>
+
+        <div className="mt-4 flex justify-between">
+          <Button variant="ghost" onClick={goBack} disabled={currentQ === 0}>← Voltar</Button>
+          {step === 'submitting' && <Spinner className="h-6 w-6 text-primary-600" />}
+        </div>
+      </>
+    );
+  }
+
+  // ERROR
+  if (step === 'error') {
+    return (
+      <>
+        <PageHeader title="Erro" />
+        <Card className="text-center">
+          <div className="mb-3 text-4xl">⚠️</div>
+          <p className="font-medium text-red-600">{errorMsg}</p>
+          <p className="mt-2 text-sm text-gray-500">Suas respostas não foram perdidas.</p>
+          <div className="mt-6 flex justify-center gap-3">
+            <Button onClick={() => submit(responses)}>Tentar novamente</Button>
+            <Button variant="ghost" onClick={() => setStep('intro')}>Voltar ao início</Button>
+          </div>
         </Card>
       </>
     );
   }
 
-  return (
-    <>
-      <PageHeader title="NR-1: Saúde Mental" subtitle="Avaliação de riscos psicossociais — anônima e conforme LGPD" />
+  // RESULT
+  if (step === 'result' && result) {
+    return (
+      <>
+        <PageHeader title="Resultado da Avaliação" />
+        <Card className="text-center">
+          <p className="text-sm text-gray-500">Seu nível de risco</p>
+          <div className="mt-3 inline-block"><Badge color={riskColors[result.overallRiskLevel] || 'gray'} className="text-base px-6 py-2">{riskLabels[result.overallRiskLevel] || result.overallRiskLevel}</Badge></div>
+          <p className="mt-4 text-2xl font-bold text-gray-900">{result.totalScore}<span className="text-lg text-gray-400">/{result.maxScore}</span></p>
+          <p className="mt-1 text-xs text-gray-500">Score total</p>
+          <p className="mt-6 rounded-lg bg-gray-50 p-4 text-sm text-gray-700">{result.recommendation}</p>
+        </Card>
 
-      {/* Progress bar */}
-      <div className="mb-6">
-        <div className="flex justify-between text-xs text-gray-500">
-          <span>Progresso</span>
-          <span>{answeredCount}/{QUESTIONS.length} respondidas</span>
-        </div>
-        <div className="mt-1 h-2 rounded-full bg-gray-100">
-          <div className="h-2 rounded-full bg-primary-600 transition-all" style={{ width: `${progress}%` }} />
-        </div>
-      </div>
-
-      <div className="space-y-6">
-        {QUESTIONS.map((q, idx) => (
-          <Card key={q.id}>
-            <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">
-              {idx + 1}. {q.label}
-            </div>
-            <p className="text-sm font-medium text-gray-900">{q.question}</p>
-            <div className="mt-4">
-              <input
-                type="range"
-                min={1}
-                max={5}
-                value={responses[q.id]}
-                onChange={(e) => updateResponse(q.id, Number(e.target.value))}
-                className="w-full accent-primary-600"
-              />
-              <div className="mt-1 flex justify-between text-xs">
-                {LABELS.map((label, i) => (
-                  <span key={label} className={responses[q.id] === i + 1 ? 'font-semibold text-primary-600' : 'text-gray-400'}>
-                    {label}
-                  </span>
-                ))}
-              </div>
+        {(result.overallRiskLevel === 'HIGH' || result.overallRiskLevel === 'CRITICAL') && (
+          <Card className="mt-4 border-red-200 bg-red-50">
+            <div className="flex items-center justify-between">
+              <div><p className="font-semibold text-red-900">Precisa de ajuda?</p><p className="text-sm text-red-700">Ligue para o CVV — gratuito e 24h</p></div>
+              <a href="tel:188"><Button variant="danger">Ligar 188</Button></a>
             </div>
           </Card>
-        ))}
-      </div>
+        )}
 
-      <div className="mt-8">
-        <Button onClick={handleSubmit} disabled={!allAnswered || step === 'submitting'} fullWidth size="lg">
-          {step === 'submitting' ? <Spinner className="h-5 w-5" /> : allAnswered ? 'Enviar Avaliação' : 'Responda todas as questões'}
-        </Button>
-        <p className="mt-3 text-center text-xs text-gray-500">Suas respostas são anônimas e protegidas pela LGPD</p>
-      </div>
-    </>
-  );
+        <Card className="mt-4">
+          <p className="text-xs text-gray-500">Esta avaliação não substitui um diagnóstico clínico. Consulte um profissional de saúde para avaliação completa.</p>
+        </Card>
+
+        <div className="mt-6 flex justify-center gap-3">
+          <Button onClick={start}>Fazer Nova Avaliação</Button>
+        </div>
+      </>
+    );
+  }
+
+  return null;
 }

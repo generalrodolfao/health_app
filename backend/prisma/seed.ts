@@ -1,69 +1,92 @@
-import { PrismaClient, FacilityType, CheckupItemStatus } from '@prisma/client';
+import { PrismaClient, FacilityType, CheckupItemStatus, CheckupStatus, RiskLevel } from '@prisma/client';
 
 const prisma = new PrismaClient();
+const DEMO_USER = 'demo-user';
+const YEAR = new Date().getFullYear();
 
 async function main() {
-  console.log('Seeding database...');
+  console.log('Seeding...');
 
-  // Demo user
+  // User
   await prisma.user.upsert({
-    where: { id: 'demo-user' },
+    where: { id: DEMO_USER },
     update: {},
-    create: {
-      id: 'demo-user',
-      name: 'Maria Silva',
-      email: 'maria@healthapp.com',
-      phone: '(11) 99999-8888',
-    },
-  });
-  console.log('  Demo user created');
-
-  // Demo checkup for current year with items
-  const year = new Date().getFullYear();
-  const existingCheckup = await prisma.checkup.findUnique({
-    where: { userId_year: { userId: 'demo-user', year } },
+    create: { id: DEMO_USER, name: 'Maria Silva', email: 'maria@healthapp.com', phone: '(11) 99999-8888' },
   });
 
-  if (!existingCheckup) {
+  // Current year checkup (in progress — 3 of 7 done)
+  const existing = await prisma.checkup.findUnique({ where: { userId_year: { userId: DEMO_USER, year: YEAR } } });
+  if (!existing) {
     await prisma.checkup.create({
       data: {
-        userId: 'demo-user',
-        year,
-        targetDate: new Date(`${year}-12-31`),
-        status: 'IN_PROGRESS',
+        userId: DEMO_USER, year: YEAR, targetDate: new Date(`${YEAR}-12-31`), status: CheckupStatus.IN_PROGRESS,
         items: {
           create: [
-            { examType: 'Hemograma Completo', professionalType: 'Laboratório', category: 'Rotina', status: CheckupItemStatus.COMPLETED, completedDate: new Date(`${year}-01-15`) },
-            { examType: 'Exame de Urina', professionalType: 'Laboratório', category: 'Rotina', status: CheckupItemStatus.COMPLETED, completedDate: new Date(`${year}-02-10`) },
-            { examType: 'Eletrocardiograma', professionalType: 'Cardiologista', category: 'Cardiovascular', status: CheckupItemStatus.PENDING },
-            { examType: 'Limpeza e Avaliação', professionalType: 'Dentista', category: 'Dental', status: CheckupItemStatus.COMPLETED, completedDate: new Date(`${year}-03-05`) },
-            { examType: 'Raio-X Panorâmico', professionalType: 'Dentista', category: 'Dental', status: CheckupItemStatus.PENDING },
-            { examType: 'Fundo de Olho', professionalType: 'Oftalmologista', category: 'Visão', status: CheckupItemStatus.PENDING },
-            { examType: 'Avaliação Psicológica', professionalType: 'Psicólogo', category: 'Mental', status: CheckupItemStatus.PENDING },
+            { examType: 'Hemograma Completo', professionalType: 'Laboratório', category: 'Rotina', status: CheckupItemStatus.COMPLETED, completedDate: new Date(`${YEAR}-01-15`) },
+            { examType: 'Glicemia em Jejum', professionalType: 'Laboratório', category: 'Rotina', status: CheckupItemStatus.COMPLETED, completedDate: new Date(`${YEAR}-02-10`) },
+            { examType: 'Colesterol Total', professionalType: 'Laboratório', category: 'Rotina', status: CheckupItemStatus.PENDING },
+            { examType: 'Eletrocardiograma', professionalType: 'Cardiologista', category: 'Cardiovascular', status: CheckupItemStatus.COMPLETED, completedDate: new Date(`${YEAR}-03-05`) },
+            { examType: 'Ecocardiograma', professionalType: 'Cardiologista', category: 'Cardiovascular', status: CheckupItemStatus.PENDING },
+            { examType: 'Limpeza Dental', professionalType: 'Dentista', category: 'Dental', status: CheckupItemStatus.PENDING },
+            { examType: 'Avaliação Psicológica', professionalType: 'Psicólogo', category: 'Saúde Mental', status: CheckupItemStatus.PENDING },
           ],
         },
       },
     });
-    console.log('  Demo checkup created with 7 items (3 completed)');
   }
 
-  // Facilities (fallback for when Overpass API is unavailable)
+  // Previous years (completed)
+  for (const y of [YEAR - 1, YEAR - 2]) {
+    const ex = await prisma.checkup.findUnique({ where: { userId_year: { userId: DEMO_USER, year: y } } });
+    if (!ex) {
+      await prisma.checkup.create({
+        data: {
+          userId: DEMO_USER, year: y, targetDate: new Date(`${y}-12-31`), status: CheckupStatus.COMPLETED,
+          items: {
+            create: [
+              { examType: 'Hemograma Completo', professionalType: 'Laboratório', category: 'Rotina', status: CheckupItemStatus.COMPLETED, completedDate: new Date(`${y}-03-15`) },
+              { examType: 'Eletrocardiograma', professionalType: 'Cardiologista', category: 'Cardiovascular', status: CheckupItemStatus.COMPLETED, completedDate: new Date(`${y}-05-20`) },
+              { examType: 'Limpeza Dental', professionalType: 'Dentista', category: 'Dental', status: CheckupItemStatus.COMPLETED, completedDate: new Date(`${y}-06-10`) },
+            ],
+          },
+        },
+      });
+    }
+  }
+
+  // NR-1 assessments (3 historical)
+  const existingAssessments = await prisma.mentalHealthAssessment.count({ where: { userId: DEMO_USER } });
+  if (existingAssessments === 0) {
+    const samples = [
+      { responses: { "0": 0, "1": 1, "2": 0, "3": 1, "4": 0, "5": 0, "6": 1, "7": 0, "8": 0 }, level: RiskLevel.LOW, date: new Date(`${YEAR}-01-10`) },
+      { responses: { "0": 1, "1": 1, "2": 2, "3": 2, "4": 1, "5": 1, "6": 1, "7": 0, "8": 0 }, level: RiskLevel.MEDIUM, date: new Date(`${YEAR}-04-15`) },
+      { responses: { "0": 2, "1": 2, "2": 3, "3": 3, "4": 2, "5": 2, "6": 2, "7": 1, "8": 0 }, level: RiskLevel.HIGH, date: new Date(`${YEAR}-07-01`) },
+    ];
+    for (const s of samples) {
+      await prisma.mentalHealthAssessment.create({
+        data: { userId: DEMO_USER, responses: JSON.stringify(s.responses), overallRiskLevel: s.level, assessedAt: s.date },
+      });
+    }
+  }
+
+  // Facilities (diverse types)
   const facilities = [
-    { name: 'Hospital Sírio-Libanês', type: 'HOSPITAL' as FacilityType, address: 'Rua Dona Adma Jafet, 91 - Bela Vista, São Paulo', phone: '(11) 3394-0200', lat: -23.5585, lng: -46.6575, openHours: '24h', is24h: true },
-    { name: 'Hospital Albert Einstein', type: 'HOSPITAL' as FacilityType, address: 'Av. Albert Einstein, 627 - Morumbi, São Paulo', phone: '(11) 2151-1233', lat: -23.5992, lng: -46.7092, openHours: '24h', is24h: true },
-    { name: 'Hospital das Clínicas', type: 'HOSPITAL' as FacilityType, address: 'Av. Dr. Enéas de Carvalho Aguiar, 255 - São Paulo', phone: '(11) 2661-5000', lat: -23.5536, lng: -46.6693, openHours: '24h', is24h: true },
-    { name: 'Farmácia São João - Paulista', type: 'PHARMACY' as FacilityType, address: 'Av. Paulista, 2000 - Bela Vista, São Paulo', phone: '(11) 3385-0001', lat: -23.5572, lng: -46.6605, openHours: '07:00-23:00', is24h: false },
-    { name: 'Drogasil - Augusta', type: 'PHARMACY' as FacilityType, address: 'Rua Augusta, 1500 - Consolação, São Paulo', phone: '(11) 3123-0002', lat: -23.5538, lng: -46.6505, openHours: '24h', is24h: true },
+    { name: 'Hospital Sírio-Libanês', type: 'HOSPITAL', address: 'R. Dona Adma Jafet, 91 - Bela Vista, SP', phone: '(11) 3394-0200', lat: -23.5585, lng: -46.6575, is24h: true, rating: 4.8, ratingCount: 230 },
+    { name: 'Hospital Albert Einstein', type: 'HOSPITAL', address: 'Av. Albert Einstein, 627 - Morumbi, SP', phone: '(11) 2151-1233', lat: -23.5992, lng: -46.7092, is24h: true, rating: 4.7, ratingCount: 180 },
+    { name: 'Hospital das Clínicas', type: 'HOSPITAL', address: 'Av. Dr. Enéas de Carvalho Aguiar, 255 - SP', phone: '(11) 2661-5000', lat: -23.5536, lng: -46.6693, is24h: true, rating: 4.2, ratingCount: 95 },
+    { name: 'Farmácia São João - Paulista', type: 'PHARMACY', address: 'Av. Paulista, 2000 - Bela Vista, SP', phone: '(11) 3385-0001', lat: -23.5572, lng: -46.6605, is24h: false, rating: 4.3, ratingCount: 45 },
+    { name: 'Drogasil - Augusta', type: 'PHARMACY', address: 'R. Augusta, 1500 - Consolação, SP', phone: '(11) 3123-0002', lat: -23.5538, lng: -46.6505, is24h: true, rating: 4.5, ratingCount: 62 },
+    { name: 'Clínica Vida', type: 'CLINIC', address: 'R. São Carlos do Pinhal, 500 - Bela Vista, SP', phone: '(11) 3333-0000', lat: -23.5580, lng: -46.6550, is24h: false, rating: 4.1, ratingCount: 28 },
+    { name: 'Laboratório Fleury', type: 'LABORATORY', address: 'Av. das Nações Unidas, 11443 - Vila Olímpia, SP', phone: '(11) 3394-0200', lat: -23.5995, lng: -46.6840, is24h: false, rating: 4.6, ratingCount: 150 },
   ];
-
   for (const f of facilities) {
-    await prisma.facility.create({ data: f }).catch(() => {});
+    const exists = await prisma.facility.findFirst({ where: { name: f.name } });
+    if (!exists) {
+      await prisma.facility.create({ data: { ...f, type: f.type as FacilityType } });
+    }
   }
-  console.log(`  ${facilities.length} facilities created`);
 
   console.log('Seed complete!');
 }
 
-main()
-  .catch((e) => { console.error(e); process.exit(1); })
-  .finally(() => prisma.$disconnect());
+main().catch((e) => { console.error(e); process.exit(1); }).finally(() => prisma.$disconnect());

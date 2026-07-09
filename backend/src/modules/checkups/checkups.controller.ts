@@ -7,27 +7,21 @@ import { UpdateItemDto } from './dto/update-item.dto';
 @ApiTags('Checkups')
 @Controller('checkups')
 export class CheckupsController {
-  constructor(private readonly checkupsService: CheckupsService) {}
+  constructor(private readonly svc: CheckupsService) {}
 
-  @Get()
-  @ApiOperation({ summary: 'Listar checkups do usuário demo' })
-  findAll() { return this.checkupsService.findByUser('demo-user'); }
+  @Get() findAll() { return this.svc.findByUser('demo-user'); }
 
-  @Get('timeline')
-  @ApiOperation({ summary: 'Linha do tempo de checkups' })
-  timeline() { return this.checkupsService.getTimeline('demo-user'); }
+  @Get('timeline') timeline() { return this.svc.getTimeline('demo-user'); }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Detalhes do checkup' })
-  findOne(@Param('id') id: string) { return this.checkupsService.findById(id, 'demo-user'); }
+  @Get(':id') findOne(@Param('id') id: string) { return this.svc.findById(id, 'demo-user'); }
 
-  @Post()
-  @ApiOperation({ summary: 'Criar checkup anual' })
-  create(@Body() dto: CreateCheckupDto) { return this.checkupsService.create('demo-user', dto); }
+  @Post() create(@Body() dto: CreateCheckupDto) { return this.svc.create('demo-user', dto); }
 
-  @Patch('items/:itemId')
-  @ApiOperation({ summary: 'Atualizar item do checkup (concluir, agendar, etc)' })
-  updateItem(@Param('itemId') itemId: string, @Body() dto: UpdateItemDto) {
-    return this.checkupsService.updateItem(itemId, 'demo-user', dto);
+  @Post(':id/items') addItem(@Param('id') id: string, @Body() dto: { examType: string; professionalType: string; category: string }) {
+    return this.svc.addItem(id, 'demo-user', dto);
+  }
+
+  @Patch('items/:itemId') updateItem(@Param('itemId') id: string, @Body() dto: UpdateItemDto) {
+    return this.svc.updateItem(id, 'demo-user', dto);
   }
 }

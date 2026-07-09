@@ -3,15 +3,43 @@ import { PrismaService } from '../../common/prisma.service';
 import { SubmitAssessmentDto } from './dto/submit-assessment.dto';
 import { CreateActionDto } from './dto/create-action.dto';
 
+const NR1_QUESTIONS = [
+  'Pouco interesse ou prazer em fazer as coisas',
+  'Se sente pra baixo, deprimido ou sem esperança',
+  'Dificuldade para dormir ou dormir demais',
+  'Sente-se cansado ou com pouca energia',
+  'Falta de apetite ou comendo demais',
+  'Se sente ruim consigo mesmo — que é um fracasso',
+  'Dificuldade para se concentrar em atividades',
+  'Movimento ou fala tão lentos que outros notaram',
+  'Pensamentos em se machucar ou que seria melhor não estar vivo',
+];
+
+const RESPONSE_OPTIONS = [
+  { label: 'Nunca', value: 0 },
+  { label: 'Vários dias', value: 1 },
+  { label: 'Mais da metade dos dias', value: 2 },
+  { label: 'Quase todos os dias', value: 3 },
+];
+
 @Injectable()
 export class Nr1Service {
   constructor(private readonly prisma: PrismaService) {}
 
-  async submitAssessment(userId: string, dto: SubmitAssessmentDto) {
-    const scores = dto.responses as Record<string, number>;
-    const overallRiskLevel = this.calculateRiskLevel(scores);
+  getQuestions() {
+    return NR1_QUESTIONS.map((question, i) => ({
+      id: i,
+      question,
+      options: RESPONSE_OPTIONS,
+    }));
+  }
 
-    return this.prisma.mentalHealthAssessment.create({
+  async submitAssessment(userId: string, dto: SubmitAssessmentDto) {
+    const scores = Object.values(dto.responses);
+    const totalScore = scores.reduce((a, b) => a + b, 0);
+    const overallRiskLevel = this.scoreToRisk(totalScore);
+
+    const assessment = await this.prisma.mentalHealthAssessment.create({
       data: {
         userId,
         responses: JSON.stringify(dto.responses),
@@ -19,65 +47,65 @@ export class Nr1Service {
         isAnonymous: dto.isAnonymous ?? true,
       },
     });
+
+    return {
+      id: assessment.id,
+      overallRiskLevel,
+      totalScore,
+      maxScore: NR1_QUESTIONS.length * 3,
+      recommendation: this.getRecommendation(overallRiskLevel),
+      assessedAt: assessment.assessedAt,
+    };
   }
 
-  async getAssessments() {
+  async getHistory(userId: string) {
     return this.prisma.mentalHealthAssessment.findMany({
-      include: { user: { select: { id: true, name: true } } },
+      where: { userId },
       orderBy: { assessedAt: 'desc' },
+      select: { id: true, overallRiskLevel: true, assessedAt: true, responses: true },
     });
   }
 
-  async getDashboard(companyId: string) {
+  async getDashboard() {
     const assessments = await this.prisma.mentalHealthAssessment.findMany();
     const total = assessments.length;
     const highRisk = assessments.filter((a) => a.overallRiskLevel === 'HIGH' || a.overallRiskLevel === 'CRITICAL').length;
-
-    const actions = await this.prisma.mentalHealthAction.findMany();
-    const completed = actions.filter((a) => a.status === 'COMPLETED').length;
-
     return {
       totalAssessments: total,
       highRiskCount: highRisk,
       riskPercentage: total ? Math.round((highRisk / total) * 100) : 0,
-      totalActions: actions.length,
-      completedActions: completed,
-      completionRate: actions.length ? Math.round((completed / actions.length) * 100) : 0,
     };
   }
 
-  async createAction(companyId: string, dto: CreateActionDto) {
+  async createAction(dto: CreateActionDto) {
     return this.prisma.mentalHealthAction.create({
       data: {
-        title: dto.title,
-        description: dto.description,
-        riskDimension: dto.riskDimension,
-        assignedTo: dto.assignedTo,
+        title: dto.title, description: dto.description,
+        riskDimension: dto.riskDimension, assignedTo: dto.assignedTo,
         dueDate: new Date(dto.dueDate),
       },
     });
   }
 
-  async getActions(companyId: string) {
+  async getActions() {
     return this.prisma.mentalHealthAction.findMany({ orderBy: { createdAt: 'desc' } });
   }
 
-  async getHistory(companyId: string) {
-    const assessments = await this.prisma.mentalHealthAssessment.findMany({
-      orderBy: { assessedAt: 'desc' },
-      take: 100,
-    });
-    const actions = await this.prisma.mentalHealthAction.findMany({ orderBy: { createdAt: 'desc' } });
-    return { assessments, actions };
+  private scoreToRisk(score: number): 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' {
+    if (score >= 20) return 'CRITICAL';
+    if (score >= 15) return 'HIGH';
+    if (score >= 10) return 'MEDIUM';
+    if (score >= 5) return 'LOW';
+    return 'LOW';
   }
 
-  private calculateRiskLevel(scores: Record<string, number>): 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' {
-    const values = Object.values(scores);
-    if (values.length === 0) return 'LOW';
-    const avg = values.reduce((a, b) => a + b, 0) / values.length;
-    if (avg >= 4.5) return 'CRITICAL';
-    if (avg >= 3.5) return 'HIGH';
-    if (avg >= 2.5) return 'MEDIUM';
-    return 'LOW';
+  private getRecommendation(level: string): string {
+    const recs: Record<string, string> = {
+      LOW: 'Seu resultado sugere baixo risco. Continue cuidando da sua saúde mental.',
+      MEDIUM: 'Seu resultado sugere risco moderado. Considere conversar com um profissional.',
+      HIGH: 'Seu resultado sugere risco alto. Recomendamos fortemente buscar acompanhamento profissional.',
+      CRITICAL: 'Seu resultado sugere risco grave. Busque ajuda profissional imediatamente. Se estiver em crise, ligue 188 (CVV).',
+    };
+    return recs[level] || recs.LOW;
   }
 }
