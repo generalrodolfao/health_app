@@ -1,15 +1,17 @@
 # ---- Build Stage ----
+# NOTE: This Dockerfile expects build context = repo root ( Railway uses root,
+# docker-compose uses context: .. ). All COPY paths are root-relative.
 FROM node:22-alpine AS builder
 WORKDIR /app
 
 RUN apk add --no-cache openssl
 
-COPY package.json package-lock.json ./
+COPY backend/package.json backend/package-lock.json ./
 RUN npm ci && npm cache clean --force
 
-COPY tsconfig.json nest-cli.json ./
-COPY src/ src/
-COPY prisma/ prisma/
+COPY backend/tsconfig.json backend/nest-cli.json ./
+COPY backend/src/ src/
+COPY backend/prisma/ prisma/
 
 RUN npx prisma generate
 RUN npm run build
@@ -26,7 +28,7 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
-COPY package.json ./
+COPY backend/package.json ./
 
 ENV NODE_ENV=production
 ENV PORT=3333

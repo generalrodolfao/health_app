@@ -1,13 +1,16 @@
 # ---- Build Stage ----
+# NOTE: This Dockerfile expects build context = repo root. All COPY paths are
+# root-relative so it works with Railway (root context) and docker-compose
+# (context: ..).
 FROM node:22-alpine AS builder
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci && npm cache clean --force
 
-COPY tsconfig.json next.config.ts postcss.config.mjs ./
-COPY src/ src/
-COPY public/ public/
+COPY frontend/tsconfig.json frontend/next.config.ts frontend/postcss.config.mjs ./
+COPY frontend/src/ src/
+COPY frontend/public/ public/
 
 ARG NEXT_PUBLIC_API_URL=http://localhost:3333/api
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL

@@ -1,23 +1,39 @@
-node_modules
+# Root .dockerignore (build context = repo root for both Railway + docker-compose)
+# Excludes everything not needed by either backend or frontend builds.
+
+# Dependencies
+**/node_modules
 backend/node_modules
 frontend/node_modules
-dist
-.next
+
+# Build outputs
+**/dist
+**/.next
 backend/dist
 frontend/.next
-coverage
-.env
-.env.local
-*.log
-.DS_Store
-.git
-.gitignore
-README.md
-backend/.dockerignore
-frontend/.dockerignore
+
+# Tests & coverage
+**/coverage
+**/__tests__
+backend/test
 backend/coverage
 frontend/coverage
-backend/__tests__
-backend/test
-frontend/__tests__
+
+# Infra & docs (not needed in build)
 infra
+docs
+skills
+.github
+
+# Env & secrets
+**/.env
+**/.env.local
+**/.env.example
+
+# Misc
+.git
+.gitignore
+.DS_Store
+*.log
+README.md
+redis-staging/**

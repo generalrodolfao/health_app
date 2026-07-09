@@ -31,8 +31,8 @@ services:
 
   backend:
     build:
-      context: ../backend
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: backend/Dockerfile
     container_name: healthapp-api
     restart: unless-stopped
     ports:
@@ -53,8 +53,8 @@ services:
 
   frontend:
     build:
-      context: ../frontend
-      dockerfile: Dockerfile.dev
+      context: ..
+      dockerfile: frontend/Dockerfile.dev
     container_name: healthapp-web
     restart: unless-stopped
     ports:
