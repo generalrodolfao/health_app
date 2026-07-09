@@ -38,4 +38,4 @@ ENV DATABASE_URL="file:/app/data.db"
 HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=5 \
   CMD wget -qO- http://127.0.0.1:3333/api/health || exit 1
 
-CMD ["/start.sh"]
+CMD ["sh", "/start.sh"]
