@@ -66,8 +66,10 @@ export class Nr1Service {
     });
   }
 
-  async getDashboard() {
-    const assessments = await this.prisma.mentalHealthAssessment.findMany();
+  async getDashboard(userId: string) {
+    const assessments = await this.prisma.mentalHealthAssessment.findMany({
+      where: { userId },
+    });
     const total = assessments.length;
     const highRisk = assessments.filter((a) => a.overallRiskLevel === 'HIGH' || a.overallRiskLevel === 'CRITICAL').length;
     return {
@@ -77,18 +79,21 @@ export class Nr1Service {
     };
   }
 
-  async createAction(dto: CreateActionDto) {
+  async createAction(userId: string, dto: CreateActionDto) {
     return this.prisma.mentalHealthAction.create({
       data: {
         title: dto.title, description: dto.description,
-        riskDimension: dto.riskDimension, assignedTo: dto.assignedTo,
+        riskDimension: dto.riskDimension, assignedTo: userId,
         dueDate: new Date(dto.dueDate),
       },
     });
   }
 
-  async getActions() {
-    return this.prisma.mentalHealthAction.findMany({ orderBy: { createdAt: 'desc' } });
+  async getActions(userId: string) {
+    return this.prisma.mentalHealthAction.findMany({
+      where: { assignedTo: userId },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   private scoreToRisk(score: number): 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' {

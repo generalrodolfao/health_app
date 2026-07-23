@@ -2,9 +2,11 @@ import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { FacilitiesService } from './facilities.service';
 import { FacilityType } from '@prisma/client';
+import { Public } from '../../common/public.decorator';
 
 @ApiTags('Facilities')
 @Controller('facilities')
+@Public()
 export class FacilitiesController {
   constructor(private readonly facilitiesService: FacilitiesService) {}
 

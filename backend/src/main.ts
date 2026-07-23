@@ -9,7 +9,7 @@ async function bootstrap() {
   try {
     const app = await NestFactory.create(AppModule);
     app.use(helmet({ contentSecurityPolicy: false }));
-    app.enableCors({ origin: '*' });
+    app.enableCors({ origin: process.env.CORS_ORIGIN?.split(',') || 'http://localhost:5173' });
     app.setGlobalPrefix('api');
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
